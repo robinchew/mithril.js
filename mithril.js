@@ -1,5 +1,17 @@
-;(function() {
+export const m = (function(window) {
 "use strict"
+if (window.document === undefined) {
+    // Mock out window if run with node.
+    // Node is assumed if window doesn't have document.
+    window = {
+        document: {
+            createDocumentFragment: () => {},
+        },
+        history: {
+            pushState: () => {},
+        },
+    };
+}
 function Vnode(tag, key, attrs0, children, text, dom) {
 	return {tag: tag, key: key, attrs: attrs0, children: children, text: text, dom: dom, domSize: undefined, state: undefined, _state: undefined, events: undefined, instance: undefined, skip: false}
 }
@@ -1224,4 +1236,5 @@ m.version = "1.1.1"
 m.vnode = Vnode
 if (typeof module !== "undefined") module["exports"] = m
 else window.m = m
-}());
+return m;
+}(this));

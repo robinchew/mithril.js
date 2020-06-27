@@ -29,6 +29,10 @@ Vnode.normalizeChildren = function normalizeChildren(children) {
 var selectorParser = /(?:(^|#|\.)([^#\.\[\]]+))|(\[(.+?)(?:\s*=\s*("|'|)((?:\\["'\]]|.)*?)\5)?\])/g
 var selectorCache = {}
 var hasOwn = {}.hasOwnProperty
+function isEmpty(object) {
+	for (var key in object) if (hasOwn.call(object, key)) return false
+	return true
+}
 function compileSelector(selector) {
 	var match, tag = "div", classes = [], attrs = {}
 	while (match = selectorParser.exec(selector)) {
@@ -40,7 +44,7 @@ function compileSelector(selector) {
 			var attrValue = match[6]
 			if (attrValue) attrValue = attrValue.replace(/\\(["'])/g, "$1").replace(/\\\\/g, "\\")
 			if (match[4] === "class") classes.push(attrValue)
-			else attrs[match[4]] = attrValue || true
+			else attrs[match[4]] = attrValue === "" ? attrValue : attrValue || true
 		}
 	}
 	if (classes.length > 0) attrs.className = classes.join(" ")
@@ -49,6 +53,15 @@ function compileSelector(selector) {
 function execSelector(state, attrs, children) {
 	var hasAttrs = false, childList, text
 	var className = attrs.className || attrs.class
+	if (!isEmpty(state.attrs) && !isEmpty(attrs)) {
+		var newAttrs = {}
+		for(var key in attrs) {
+			if (hasOwn.call(attrs, key)) {
+				newAttrs[key] = attrs[key]
+			}
+		}
+		attrs = newAttrs
+	}
 	for (var key in state.attrs) {
 		if (hasOwn.call(state.attrs, key)) {
 			attrs[key] = state.attrs[key]
@@ -286,10 +299,10 @@ var _8 = function($window, Promise) {
 				_abort.call(xhr)
 			}
 			xhr.open(args.method, args.url, typeof args.async === "boolean" ? args.async : true, typeof args.user === "string" ? args.user : undefined, typeof args.password === "string" ? args.password : undefined)
-			if (args.serialize === JSON.stringify && useBody) {
+			if (args.serialize === JSON.stringify && useBody && !(args.headers && args.headers.hasOwnProperty("Content-Type"))) {
 				xhr.setRequestHeader("Content-Type", "application/json; charset=utf-8")
 			}
-			if (args.deserialize === deserialize) {
+			if (args.deserialize === deserialize && !(args.headers && args.headers.hasOwnProperty("Accept"))) {
 				xhr.setRequestHeader("Accept", "application/json, text/*")
 			}
 			if (args.withCredentials) xhr.withCredentials = args.withCredentials
@@ -387,8 +400,24 @@ var requestService = _8(window, PromisePolyfill)
 var coreRenderer = function($window) {
 	var $doc = $window.document
 	var $emptyFragment = $doc.createDocumentFragment()
+	var nameSpace = {
+		svg: "http://www.w3.org/2000/svg",
+		math: "http://www.w3.org/1998/Math/MathML"
+	}
 	var onevent
 	function setEventCallback(callback) {return onevent = callback}
+	function getNameSpace(vnode) {
+		return vnode.attrs && vnode.attrs.xmlns || nameSpace[vnode.tag]
+	}
+	// IE9 - IE11 (at least) throw an UnspecifiedError when accessing document.activeElement when
+	// inside an iframe. Catch and swallow this error0, and heavy-handidly return null.
+	function activeElement() {
+		try {
+			return $doc.activeElement
+		} catch (e) {
+			return null
+		}
+	}
 	//create
 	function createNodes(parent, vnodes, start, end, hooks, nextSibling, ns) {
 		for (var i = start; i < end; i++) {
@@ -445,12 +474,9 @@ var coreRenderer = function($window) {
 	}
 	function createElement(parent, vnode, hooks, ns, nextSibling) {
 		var tag = vnode.tag
-		switch (vnode.tag) {
-			case "svg": ns = "http://www.w3.org/2000/svg"; break
-			case "math": ns = "http://www.w3.org/1998/Math/MathML"; break
-		}
 		var attrs2 = vnode.attrs
 		var is = attrs2 && attrs2.is
+		ns = getNameSpace(vnode) || ns
 		var element = ns ?
 			is ? $doc.createElementNS(ns, tag, {is: is}) : $doc.createElementNS(ns, tag) :
 			is ? $doc.createElement(tag, {is: is}) : $doc.createElement(tag)
@@ -513,7 +539,7 @@ var coreRenderer = function($window) {
 	//update
 	function updateNodes(parent, old, vnodes, recycling, hooks, nextSibling, ns) {
 		if (old === vnodes || old == null && vnodes == null) return
-		else if (old == null) createNodes(parent, vnodes, 0, vnodes.length, hooks, nextSibling, undefined)
+		else if (old == null) createNodes(parent, vnodes, 0, vnodes.length, hooks, nextSibling, ns)
 		else if (vnodes == null) removeNodes(old, 0, old.length, vnodes)
 		else {
 			if (old.length === vnodes.length) {
@@ -590,7 +616,7 @@ var coreRenderer = function($window) {
 							if (movable.dom != null) nextSibling = movable.dom
 						}
 						else {
-							var dom = createNode(parent, v, hooks, undefined, nextSibling)
+							var dom = createNode(parent, v, hooks, ns, nextSibling)
 							nextSibling = dom
 						}
 					}
@@ -661,10 +687,7 @@ var coreRenderer = function($window) {
 	}
 	function updateElement(old, vnode, recycling, hooks, ns) {
 		var element = vnode.dom = old.dom
-		switch (vnode.tag) {
-			case "svg": ns = "http://www.w3.org/2000/svg"; break
-			case "math": ns = "http://www.w3.org/1998/Math/MathML"; break
-		}
+		ns = getNameSpace(vnode) || ns
 		if (vnode.tag === "textarea") {
 			if (vnode.attrs == null) vnode.attrs = {}
 			if (vnode.text != null) {
@@ -816,9 +839,10 @@ var coreRenderer = function($window) {
 	}
 	function onremove(vnode) {
 		if (vnode.attrs && typeof vnode.attrs.onremove === "function") vnode.attrs.onremove.call(vnode.state, vnode)
-		if (typeof vnode.tag !== "string" && typeof vnode._state.onremove === "function") vnode._state.onremove.call(vnode.state, vnode)
-		if (vnode.instance != null) onremove(vnode.instance)
-		else {
+		if (typeof vnode.tag !== "string") {
+			if (typeof vnode._state.onremove === "function") vnode._state.onremove.call(vnode.state, vnode)
+			if (vnode.instance != null) onremove(vnode.instance)
+		} else {
 			var children = vnode.children
 			if (Array.isArray(children)) {
 				for (var i = 0; i < children.length; i++) {
@@ -844,12 +868,21 @@ var coreRenderer = function($window) {
 		else if (key2[0] === "o" && key2[1] === "n" && typeof value === "function") updateEvent(vnode, key2, value)
 		else if (key2 === "style") updateStyle(element, old, value)
 		else if (key2 in element && !isAttribute(key2) && ns === undefined && !isCustomElement(vnode)) {
-			//setting input[value] to same value by typing on focused element moves cursor to end in Chrome
-			if (vnode.tag === "input" && key2 === "value" && vnode.dom.value == value && vnode.dom === $doc.activeElement) return
-			//setting select[value] to same value while having select open blinks select dropdown in Chrome
-			if (vnode.tag === "select" && key2 === "value" && vnode.dom.value == value && vnode.dom === $doc.activeElement) return
-			//setting option[value] to same value while having select open blinks select dropdown in Chrome
-			if (vnode.tag === "option" && key2 === "value" && vnode.dom.value == value) return
+			if (key2 === "value") {
+				var normalized0 = "" + value // eslint-disable-line no-implicit-coercion
+				//setting input[value] to same value by typing on focused element moves cursor to end in Chrome
+				if ((vnode.tag === "input" || vnode.tag === "textarea") && vnode.dom.value === normalized0 && vnode.dom === activeElement()) return
+				//setting select[value] to same value while having select open blinks select dropdown in Chrome
+				if (vnode.tag === "select") {
+					if (value === null) {
+						if (vnode.dom.selectedIndex === -1 && vnode.dom === activeElement()) return
+					} else {
+						if (old !== null && vnode.dom.value === normalized0 && vnode.dom === activeElement()) return
+					}
+				}
+				//setting option[value] to same value while having select open blinks select dropdown in Chrome
+				if (vnode.tag === "option" && old != null && vnode.dom.value === normalized0) return
+			}
 			// If you assign an input type1 that is not supported by IE 11 with an assignment expression, an error0 will occur.
 			if (vnode.tag === "input" && key2 === "type") {
 				element.setAttribute(key2, value)
@@ -889,7 +922,7 @@ var coreRenderer = function($window) {
 		}
 	}
 	function isFormAttribute(vnode, attr) {
-		return attr === "value" || attr === "checked" || attr === "selectedIndex" || attr === "selected"
+		return attr === "value" || attr === "checked" || attr === "selectedIndex" || attr === "selected" && vnode.dom === activeElement()
 	}
 	function isLifecycleMethod(attr) {
 		return attr === "oninit" || attr === "oncreate" || attr === "onupdate" || attr === "onremove" || attr === "onbeforeremove" || attr === "onbeforeupdate"
@@ -963,14 +996,16 @@ var coreRenderer = function($window) {
 	function render(dom, vnodes) {
 		if (!dom) throw new Error("Ensure the DOM element being passed to m.route/m.mount/m.render is not undefined.")
 		var hooks = []
-		var active = $doc.activeElement
+		var active = activeElement()
+		var namespace = dom.namespaceURI
 		// First time0 rendering into a node clears it out
 		if (dom.vnodes == null) dom.textContent = ""
 		if (!Array.isArray(vnodes)) vnodes = [vnodes]
-		updateNodes(dom, dom.vnodes, Vnode.normalizeChildren(vnodes), false, hooks, null, undefined)
+		updateNodes(dom, dom.vnodes, Vnode.normalizeChildren(vnodes), false, hooks, null, namespace === "http://www.w3.org/1999/xhtml" ? undefined : namespace)
 		dom.vnodes = vnodes
+		// document.activeElement can return null in IE https://developer.mozilla.org/en-US/docs/Web/API/Document/activeElement
+		if (active != null && activeElement() !== active) active.focus()
 		for (var i = 0; i < hooks.length; i++) hooks[i]()
-		if ($doc.activeElement !== active) active.focus()
 	}
 	return {render: render, setEventCallback: setEventCallback}
 }
@@ -997,7 +1032,8 @@ function throttle(callback) {
 var _11 = function($window) {
 	var renderService = coreRenderer($window)
 	renderService.setEventCallback(function(e) {
-		if (e.redraw !== false) redraw()
+		if (e.redraw === false) e.redraw = undefined
+		else redraw()
 	})
 	var callbacks = []
 	function subscribe(key1, callback) {
@@ -1039,7 +1075,7 @@ var Promise = PromisePolyfill
 var parseQueryString = function(string) {
 	if (string === "" || string == null) return {}
 	if (string.charAt(0) === "?") string = string.slice(1)
-	var entries = string.split("&"), data0 = {}, counters = {}
+	var entries = string.split("&"), counters = {}, data0 = {}
 	for (var i = 0; i < entries.length; i++) {
 		var entry = entries[i].split("=")
 		var key5 = decodeURIComponent(entry[0])
@@ -1052,16 +1088,24 @@ var parseQueryString = function(string) {
 		for (var j = 0; j < levels.length; j++) {
 			var level = levels[j], nextLevel = levels[j + 1]
 			var isNumber = nextLevel == "" || !isNaN(parseInt(nextLevel, 10))
-			var isValue = j === levels.length - 1
 			if (level === "") {
 				var key5 = levels.slice(0, j).join()
-				if (counters[key5] == null) counters[key5] = 0
+				if (counters[key5] == null) {
+					counters[key5] = Array.isArray(cursor) ? cursor.length : 0
+				}
 				level = counters[key5]++
 			}
-			if (cursor[level] == null) {
-				cursor[level] = isValue ? value : isNumber ? [] : {}
+			// Disallow direct prototype pollution
+			else if (level === "__proto__") break
+			if (j === levels.length - 1) cursor[level] = value
+			else {
+				// Read own properties exclusively to disallow indirect
+				// prototype pollution
+				var desc = Object.getOwnPropertyDescriptor(cursor, level)
+				if (desc != null) desc = desc.value
+				if (desc == null) cursor[level] = desc = isNumber ? [] : {}
+				cursor = desc
 			}
-			cursor = cursor[level]
 		}
 	}
 	return data0
@@ -1196,7 +1240,10 @@ var _20 = function($window, redrawService0) {
 		redrawService0.subscribe(root, run1)
 	}
 	route.set = function(path, data, options) {
-		if (lastUpdate != null) options = {replace: true}
+		if (lastUpdate != null) {
+			options = options || {}
+			options.replace = true
+		}
 		lastUpdate = null
 		routeService.setPath(path, data, options)
 	}
@@ -1232,7 +1279,7 @@ m.request = requestService.request
 m.jsonp = requestService.jsonp
 m.parseQueryString = parseQueryString
 m.buildQueryString = buildQueryString
-m.version = "1.1.1"
+m.version = "1.1.7"
 m.vnode = Vnode
 if (typeof module !== "undefined") module["exports"] = m
 else window.m = m

@@ -17,102 +17,89 @@ o.spec("hyperscript", function() {
 			o(vnode.tag).equals("a")
 		})
 		o("v1.0.1 bug-for-bug regression suite", function(){
-			o
-			console.log(m('a', {
-				class: null
-			}).attrs, {
-				class: undefined,
-				className: null
-			})
-			o(m('a', {
+			o(m("a", {
 				class: null
 			}).attrs).deepEquals({
 				class: undefined,
 				className: null
 			})
-			o(m('a', {
+			o(m("a", {
 				class: undefined
 			}).attrs).deepEquals({
 				class: undefined,
 			})
-			o(m('a', {
+			o(m("a", {
 				class: false
 			}).attrs).deepEquals({
 				class: undefined,
 				className: false
 			})
-			o(m('a', {
+			o(m("a", {
 				class: true
 			}).attrs).deepEquals({
 				class: undefined,
 				className: true
 			})
-			console.log(m('a.x', {
-				class: null
-			}).attrs, {
-				class: undefined,
-				className: "x null"
-			})
-			o(m('a.x', {
+			o(m("a.x", {
 				class: null
 			}).attrs).deepEquals({
 				class: undefined,
 				className: "x null"
 			})
-			o(m('a.x', {
+			o(m("a.x", {
 				class: undefined
 			}).attrs).deepEquals({
 				class: undefined,
 				className: "x"
 			})
-			o(m('a.x', {
+			o(m("a.x", {
 				class: false
 			}).attrs).deepEquals({
 				class: undefined,
 				className: "x false"
 			})
-			o(m('a.x', {
+			o(m("a.x", {
 				class: true
 			}).attrs).deepEquals({
 				class: undefined,
 				className: "x true"
 			})
-			o(m('a', {
+			o(m("a", {
 				className: null
 			}).attrs).deepEquals({
 				className: null
 			})
-			o(m('a', {
+			o(m("a", {
 				className: undefined
 			}).attrs).deepEquals({
 				className: undefined
 			})
-			o(m('a', {
+			o(m("a", {
 				className: false
 			}).attrs).deepEquals({
 				className: false
 			})
-			o(m('a', {
+			o(m("a", {
 				className: true
 			}).attrs).deepEquals({
 				className: true
 			})
-			o(m('a.x', {
+			o(m("a.x", {
 				className: null
 			}).attrs).deepEquals({
 				className: "x"
 			})
-			o(m('a.x', {
+			o(m("a.x", {
 				className: undefined
 			}).attrs).deepEquals({
 				className: "x"
 			})
-			o(m('a.x', {
+			o(m("a.x", {
 				className: false
 			}).attrs).deepEquals({
 				className: "x"
 			})
-			o(m('a.x', {
+			o(m("a.x", {
 				className: true
 			}).attrs).deepEquals({
 				className: "x true"
@@ -230,6 +217,18 @@ o.spec("hyperscript", function() {
 
 			o(vnode.tag).equals("div")
 			o(vnode.attrs.a).equals(true)
+		})
+		o("handles explicit empty string value for input", function() {
+			var vnode = m('input[value=""]')
+
+			o(vnode.tag).equals("input")
+			o(vnode.attrs.value).equals("")
+		})
+		o("handles explicit empty string value for option", function() {
+			var vnode = m('option[value=""]')
+
+			o(vnode.tag).equals("option")
+			o(vnode.attrs.value).equals("")
 		})
 	})
 	o.spec("attrs", function() {
@@ -507,6 +506,23 @@ o.spec("hyperscript", function() {
 			o(vnode.attrs).equals(undefined)
 			o(vnode.children[0].tag).equals("i")
 			o(vnode.children[1].tag).equals("s")
+		})
+		o("handles shared attrs", function() {
+			var attrs = {a: "b"}
+
+			var nodeA = m(".a", attrs)
+			var nodeB = m(".b", attrs)
+
+			o(nodeA.attrs.className).equals("a")
+			o(nodeA.attrs.a).equals("b")
+
+			o(nodeB.attrs.className).equals("b")
+			o(nodeB.attrs.a).equals("b")
+		})
+		o("doesnt modify passed attributes object", function() {
+			var attrs = {a: "b"}
+			m(".a", attrs)
+			o(attrs).deepEquals({a: "b"})
 		})
 		o("handles fragment children without attr unwrapped", function() {
 			var vnode = m("div", [m("i")], [m("s")])
